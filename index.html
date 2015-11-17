@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>sync</title>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-2.1.4.min.js"></script>
+
+</head>
+<body>
+
+<button style="width: 90px;height: 40px;" onclick="Calibrate()" id="start_button">Click to start</button>
+<button hidden style="width: 90px;height: 40px;" onclick="ResetSyncInterval()" id="resync_button">Click to resync</button>
+
+<div id="roundtrip_times_div"></div>
+
+<div id="offsets_div"></div>
+
+<div id="offsets_vs_roundtrip_times_div"></div>
+
+<div id="results_div"></div>
+
+<div id="media_div">
+	<audio loop id="media_elem">
+		<source src="media/Strassen_piece4_203624.0ms.mp3" type="audio/mpeg">
+	</audio>
+</div>
+<div id="media_time_div"></div>
+<div id="media_calibrate_div">
+    <audio id="media_calibrate_elem">
+        <source src="https://s3-us-west-2.amazonaws.com/flukebox/point1sec.mp3" type="audio/mpeg">
+    </audio>
+</div>
+</body>
+
+<script type="text/javascript" src="https://www.google.com/jsapi"></script>
+<script src="sync.js"></script>
+
+</html>
