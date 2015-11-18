@@ -36,7 +36,19 @@ function argmin( arr ) {
 //        = t1 - t2 / 2 - t0 / 2
 //        = t1 - (t2 + t0) / 2
 
+var sock = new SockJS('/timeSocket');
+sock.onopen = function () {
+    console.log('open');
+};
+sock.onmessage = function (e) {
+    console.log('message', e.data);
+    syncCallback(e.data);
+};
+sock.onclose = function () {
+    console.log('close');
+};
 
+// sock.close();
 
 var time_data = [];
 var roundtrip_times = [];
@@ -50,75 +62,84 @@ var audio_length_ms = 203624.0;
 
 var sync_interval = 100;
 
+// var timezone_offset = (new Date()).getTimezoneOffset() * 60000;
+var t0 = (new Date()).getTime();// - timezone_offset;
+
 function ResetSyncInterval(){
 	sync_interval = 0;
 }
 
+function syncCallback(data) {
+    time_data.push([
+        t0,
+        data["server_time"],
+        (new Date()).getTime()// - timezone_offset
+        ]);
+
+    var t0_t1_t2 = time_data[time_data.length-1];
+    roundtrip_times.push(t0_t1_t2[2] - t0_t1_t2[0]);
+
+    offsets.push(t0_t1_t2[1] - (t0_t1_t2[2] + t0_t1_t2[0]) / 2);
+
+    draw1DHist(
+        roundtrip_times,
+        "roundtrip_times (ms)",
+        'blue',
+        'roundtrip_times_div');
+
+    draw1DHist(
+        offsets,
+        "offsets (ms)",
+        'green',
+        'offsets_div');
+
+    drawScatterPlot(
+        offsets,
+        roundtrip_times,
+        "offsets (ms)",
+        "roundtrip_times (ms)",
+        "Offsets vs Round-trip Times",
+        "orange",
+        "offsets_vs_roundtrip_times_div"
+        );
+
+
+    var argmin_roundtrip_times = argmin(roundtrip_times);
+    var sum_offsets = 0;
+    for(var h=0; h<argmin_roundtrip_times.length; h++){
+        sum_offsets += offsets[argmin_roundtrip_times[h]];
+        // roundtrip_times[argmin_roundtrip_times[h]]/2
+    }
+
+    GlobalOffset = sum_offsets / argmin_roundtrip_times.length;
+    $("#results_div").html(
+        "<h1>offset (ms) = " +
+        GlobalOffset.toString() +
+        " +/- " +
+        (roundtrip_times[argmin_roundtrip_times[0]] / 2).toString() +
+        "</h1>"
+        );
+
+    document.getElementById("media_elem").currentTime = ((mediaPlayerLag + data["play_position"] + (new Date()).getTime() + GlobalOffset - data["server_time"]) % audio_length_ms)/ 1000.;
+    document.getElementById("media_elem").play();
+    $("#media_time_div").html(
+        "<h1>media play time (ms) = " +
+        ((data["play_position"] + (new Date()).getTime() + GlobalOffset - data["server_time"]) % audio_length_ms)/ 1000. +
+        "</h1>"
+    );
+}
+
 function sync(){
-    // var timezone_offset = (new Date()).getTimezoneOffset() * 60000;
-    var t0 = (new Date()).getTime();// - timezone_offset;
-    $.get(
-        "/time",
-        function (data){
-            time_data.push([
-                t0,
-                data["server_time"],
-                (new Date()).getTime()// - timezone_offset
-                ]);
+    if (window.location.search.indexOf('socket') > 0) {
+        sock.send('');
+    }
+    else {
+        $.get(
+            "/time",
+            syncCallback
+        );
+    }
 
-            var t0_t1_t2 = time_data[time_data.length-1];
-            roundtrip_times.push(t0_t1_t2[2] - t0_t1_t2[0]);
-
-            offsets.push(t0_t1_t2[1] - (t0_t1_t2[2] + t0_t1_t2[0]) / 2);
-
-            draw1DHist(
-                roundtrip_times,
-                "roundtrip_times (ms)",
-                'blue',
-                'roundtrip_times_div');
-
-            draw1DHist(
-                offsets,
-                "offsets (ms)",
-                'green',
-                'offsets_div');
-
-            drawScatterPlot(
-                offsets,
-                roundtrip_times,
-                "offsets (ms)",
-                "roundtrip_times (ms)",
-                "Offsets vs Round-trip Times",
-                "orange",
-                "offsets_vs_roundtrip_times_div"
-                );
-
-
-            var argmin_roundtrip_times = argmin(roundtrip_times);
-            var sum_offsets = 0;
-            for(var h=0; h<argmin_roundtrip_times.length; h++){
-                sum_offsets += offsets[argmin_roundtrip_times[h]];
-                // roundtrip_times[argmin_roundtrip_times[h]]/2
-            }
-
-            GlobalOffset = sum_offsets / argmin_roundtrip_times.length;
-            $("#results_div").html(
-                "<h1>offset (ms) = " +
-                GlobalOffset.toString() +
-                " +/- " +
-                (roundtrip_times[argmin_roundtrip_times[0]] / 2).toString() +
-                "</h1>"
-                );
-
-            document.getElementById("media_elem").currentTime = ((mediaPlayerLag + data["play_position"] + (new Date()).getTime() + GlobalOffset - data["server_time"]) % audio_length_ms)/ 1000.;
-            document.getElementById("media_elem").play();
-            $("#media_time_div").html(
-                "<h1>media play time (ms) = " +
-                ((data["play_position"] + (new Date()).getTime() + GlobalOffset - data["server_time"]) % audio_length_ms)/ 1000. +
-                "</h1>"
-                );
-
-        });
     if(i < 500){
         i++;
         sync_interval += 375;
@@ -131,7 +152,7 @@ function Calibrate() {
     $("#resync_button").show();
 
 	document.getElementById("media_elem").load();
-	
+
     //  Measure twice, because the file buffers first time around
     var twice = false;
     var startTime;
